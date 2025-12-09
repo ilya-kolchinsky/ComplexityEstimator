@@ -1,0 +1,74 @@
+seed: 1337
+device: auto
+model:
+  name: "microsoft/deberta-v3-base"
+  dropout: 0.1
+  max_length: 512
+train:
+  batch_size: 16
+  lr_encoder: 1.0e-5
+  lr_head: 7.5e-5
+  weight_decay_encoder: 0.01
+  weight_decay_head: 0.0
+  num_epochs: 3
+  warmup_ratio: 0.06
+  grad_accum_steps: 1
+  fp16: true
+data:
+  train_csv: "data/processed/unified_train.csv"
+  dev_csv:   "data/processed/unified_dev.csv"
+  test_csv:  "data/processed/unified_test.csv"
+  text_col:  "prompt_text"
+  label_col: "label"
+  balance_batches: false
+datasets:
+  - name: "crossdiff:arc"
+    dir: data/raw/crossdiff
+    prefix: crossdiff
+    weight: 0.044
+    enabled: true
+  - name: "crossdiff:bbh"
+    dir: data/raw/crossdiff
+    prefix: crossdiff
+    weight: 0.198
+    enabled: true
+  - name: "crossdiff:gpqa_extended"
+    dir: data/raw/crossdiff
+    prefix: crossdiff
+    weight: 0.021
+    enabled: true
+  - name: "crossdiff:gsm8k"
+    dir: data/raw/crossdiff
+    prefix: crossdiff
+    weight: 0.05
+    enabled: true
+  - name: "crossdiff:ifeval"
+    dir: data/raw/crossdiff
+    prefix: crossdiff
+    weight: 0.02
+    enabled: true
+  - name: "crossdiff:math"
+    dir: data/raw/crossdiff
+    prefix: crossdiff
+    weight: 0.05
+    enabled: true
+  - name: "crossdiff:mmlu_pro"
+    dir: data/raw/crossdiff
+    prefix: crossdiff
+    weight: 0.453
+    enabled: true
+  - name: "crossdiff:musr"
+    dir: data/raw/crossdiff
+    prefix: crossdiff
+    weight: 0.028
+    enabled: true
+  - name: floorpack
+    dir: data/raw/floorpack
+    prefix: floorpack
+    weight: 0.136
+    enabled: true
+logging:
+  log_every: 50
+  out_dir: "models/deberta"
+eval:
+  batch_size: 32
