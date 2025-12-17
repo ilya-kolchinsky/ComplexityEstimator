@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+from torch.nn.functional import softplus
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from transformers import get_cosine_schedule_with_warmup
@@ -37,23 +38,75 @@ class CSVRegDataset(Dataset):
         return item
 
 
-def train_epoch(model, loader, optim, sched, device):
+def pairwise_rank_loss(preds: torch.Tensor, targets: torch.Tensor, num_pairs: int = 256):
+    """
+    Sampled logistic pairwise ranking loss, promoting correct ordering.
+    preds, targets: [B]
+    """
+    b = preds.size(0)
+    if b < 2:
+        return preds.new_tensor(0.0)
+    # sample pairs (i,j) with y_i != y_j
+    i = torch.randint(0, b, (num_pairs,), device=preds.device)
+    j = torch.randint(0, b, (num_pairs,), device=preds.device)
+    mask = (targets[i] > targets[j])  # True means i should rank above j
+    if mask.sum() == 0:
+        return preds.new_tensor(0.0)
+    s = preds[i] - preds[j]
+    # For i>j we want s large; for i<j we flip sign
+    s = torch.where(mask, s, -s)
+    return softplus(-s).mean()  # log(1+exp(-s))
 
-    # train the model
+
+def set_requires_grad(module, flag: bool):
+    for p in module.parameters():
+        p.requires_grad = flag
+
+
+def unfreeze_top_k_layers(model, k: int):
+    # DeBERTa-like: encoder.layer.<idx>.*  (largest idx = top)
+    all_layers = [m for n, m in model.enc.named_modules() if "encoder.layer." in n and n.endswith(".output")]
+    num_layers = len(all_layers)
+    top_idxs = set(range(num_layers - k, num_layers))
+    for n, p in model.enc.named_parameters():
+        # parse layer index from name
+        if "encoder.layer." in n:
+            idx = int(n.split("encoder.layer.")[1].split(".")[0])
+            p.requires_grad = (idx in top_idxs)
+        else:
+            # non-layer params (embeddings, pooler) stay frozen
+            p.requires_grad = False
+
+
+def train_epoch(model, loader, optim, sched, device, loss, rank_lambda):
     model.train()
-    ls = torch.nn.SmoothL1Loss(beta=0.1)
+
+    if loss == "mse":
+        ls = torch.nn.MSELoss()
+    elif loss == "huber":
+        ls = torch.nn.SmoothL1Loss(beta=0.1)
+    else:
+        raise ValueError(f"Unsupported loss: {loss}")
+
     losses = []
     for step, batch in enumerate(tqdm(loader, desc="train")):
         for k in ["input_ids", "attention_mask", "labels"]:
             batch.__dict__[k] = batch.__dict__[k].to(device)
         pred = model(batch.input_ids, batch.attention_mask)
-        loss = ls(pred, batch.labels)
-        loss.backward()
+        main_loss = ls(pred, batch.labels)
+
+        if rank_lambda > 0.0:
+            final_loss = main_loss + (rank_lambda * pairwise_rank_loss(pred, batch.labels))
+        else:
+            final_loss = main_loss
+
+        final_loss.backward()
+
         optim.step()
         optim.zero_grad(set_to_none=True)
         if sched is not None:
             sched.step()
-        losses.append(loss.item())
+        losses.append(final_loss.item())
         # free GPU memory of batch
         del batch
         gc.collect()
@@ -101,6 +154,12 @@ def main():
     enc = HFEncoder(cfg.model["name"])
     model = Regressor(enc, dropout=cfg.model["dropout"]).to(device)
 
+    # Optionally freeze full encoder
+    if cfg.model.get("freeze_encoder", False):
+        set_requires_grad(model.enc, False)
+    elif cfg.model.get("encoder_unfrozen_layers"):
+        unfreeze_top_k_layers(model, k=cfg.model["encoder_unfrozen_layers"])
+
     output_model_path = Path(cfg.logging["out_dir"]) / "best.pt"
     if output_model_path.exists():
         print(f"Loading the model from {output_model_path}...")
@@ -119,7 +178,7 @@ def main():
             dataset_names=list(per_batch_mix.keys()),
             ratios=per_batch_mix,
             per_batch_size=cfg.train["batch_size"],
-            num_batches=None,            # default: floor(N / batch)
+            num_batches=None,  # default: floor(N / batch)
             shuffle_each_epoch=True,
             replacement_after_exhaustion=True,
             seed=cfg.seed,
@@ -136,21 +195,25 @@ def main():
     enc_params = [(n, p) for n, p in model.named_parameters() if "enc." in n]
     head_params = [(n, p) for n, p in model.named_parameters() if "enc." not in n]
     params = [
-        {"params": [p for n, p in enc_params if not any(nd in n for nd in no_decay)], "lr": cfg.train["lr_encoder"],
-         "weight_decay": cfg.train["weight_decay_encoder"]},
-        {"params": [p for n, p in enc_params if any(nd in n for nd in no_decay)], "lr": cfg.train["lr_encoder"],
+        {"params": [p for n, p in enc_params if not any(nd in n for nd in no_decay)],
+         "lr": float(cfg.train["lr_encoder"]),
+         "weight_decay": float(cfg.train["weight_decay_encoder"])},
+        {"params": [p for n, p in enc_params if any(nd in n for nd in no_decay)], "lr": float(cfg.train["lr_encoder"]),
          "weight_decay": 0.0},
-        {"params": [p for n, p in head_params], "lr": cfg.train["lr_head"],
-         "weight_decay": cfg.train["weight_decay_head"]},
+        {"params": [p for n, p in head_params], "lr": float(cfg.train["lr_head"]),
+         "weight_decay": float(cfg.train["weight_decay_head"])},
     ]
     optim = torch.optim.AdamW(params)
     total_steps = len(train_loader) * cfg.train["num_epochs"]
     warmup = int(total_steps * cfg.train["warmup_ratio"])
     sched = get_cosine_schedule_with_warmup(optim, num_warmup_steps=warmup, num_training_steps=total_steps)
 
+    main_loss = cfg.train["loss"].lower()
+    rank_lambda = float(cfg.train["rank_lambda"])
+
     best = {"mae": 1e9, "spearman": -1.0}
     for epoch in range(cfg.train["num_epochs"]):
-        tr_loss, tr_metrics = train_epoch(model, train_loader, optim, sched, device)
+        tr_loss, tr_metrics = train_epoch(model, train_loader, optim, sched, device, main_loss, rank_lambda)
         eval_metrics = eval_epoch(model, dev_loader, device)
         print(
             f"epoch {epoch}: train_loss={tr_loss:.4f} "
