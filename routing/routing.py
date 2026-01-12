@@ -1,13 +1,16 @@
 import os
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Callable
 
 import torch
+from dotenv import load_dotenv
 
-from src.config import load_config
-from src.models.encoder import HFEncoder
-from src.models.regressor import Regressor
-from src.utils.utils import get_device
+from train.models.encoder import HFEncoder
+from train.models.regressor import Regressor
+from train.utils.config import load_config
+from train.utils.utils import get_device
+
+load_dotenv()
 
 
 @dataclass
@@ -17,11 +20,14 @@ class RoutingRule:
     upper: float
 
 
+RouteFn = Callable[[str], str]
+
+
 def load_complexity_model():
-    cfg = load_config(os.getenv("DEMO_MODEL_CONFIG_PATH"))
+    cfg = load_config(os.getenv("ROUTER_MODEL_CONFIG_PATH"))
     encoder = HFEncoder(cfg.model["name"])
     model = Regressor(encoder)
-    model.load_state_dict(torch.load(os.getenv("DEMO_MODEL_PATH"), map_location="cpu"))
+    model.load_state_dict(torch.load(os.getenv("ROUTER_MODEL_PATH"), map_location="cpu"))
     device = get_device(cfg)
     model.to(device).eval()
     return model, device, cfg.model["max_length"]
@@ -42,11 +48,11 @@ def estimate_complexity(model: Regressor, device: str, max_length: int, prompt: 
     return complexity
 
 
-def route_to_model(rules: List[RoutingRule], difficulty: float) -> Optional[RoutingRule]:
+def route_to_model(rules: List[RoutingRule], difficulty: float) -> Optional[str]:
     # Find rule whose interval contains difficulty
     for r in rules:
         if r.lower <= difficulty <= r.upper:
-            return r
+            return r.model_name
     return None
 
 
@@ -85,4 +91,31 @@ def validate_routing_rules(rules: List[RoutingRule]) -> Tuple[bool, str]:
                 f"{curr.model_name} starts at {curr.lower:.3f}"
             )
 
-    return True, "Routing configuration is valid ✅"
+    return True, "Routing configuration is valid."
+
+
+def create_single_model_route_function(model_id: str) -> RouteFn:
+    return lambda e: model_id
+
+
+def create_complexity_model_route_function(rules: List[RoutingRule]) -> Optional[RouteFn]:
+    is_valid, reason = validate_routing_rules(rules)
+    if not is_valid:
+        print(reason)
+        return None
+
+    model, device, max_length = load_complexity_model()
+
+    def route(prompt: str):
+        complexity = estimate_complexity(model, device, max_length, prompt)
+        return route_to_model(rules, complexity)
+
+    return route
+
+
+def create_single_threshold_route_function(small_model_id: str, large_model_id: str, threshold: float) -> RouteFn:
+    rules = [
+        RoutingRule(model_name=large_model_id, lower=threshold, upper=1.0),
+        RoutingRule(model_name=small_model_id, lower=0.0, upper=threshold),
+    ]
+    return create_complexity_model_route_function(rules)

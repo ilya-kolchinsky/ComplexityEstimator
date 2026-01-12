@@ -5,11 +5,8 @@ from typing import List, Optional
 import httpx
 import streamlit as st
 import yaml
-from dotenv import load_dotenv
 
-from src.routing import RoutingRule, load_complexity_model, estimate_complexity, route_to_model, validate_routing_rules
-
-load_dotenv()
+from routing.routing import RoutingRule, load_complexity_model, estimate_complexity, route_to_model, validate_routing_rules
 
 
 # -----------------------------
@@ -17,7 +14,7 @@ load_dotenv()
 # -----------------------------
 
 @dataclass
-class ModelConfig:
+class DemoModelConfig:
     name: str
     model_id: str
     url: str
@@ -36,7 +33,7 @@ def load_and_cache_complexity_model():
     return load_complexity_model()
 
 
-async def call_target_model(model: ModelConfig, prompt: str) -> str:
+async def call_target_model(model: DemoModelConfig, prompt: str) -> str:
     headers = {"Content-Type": "application/json"}
     if model.api_key:
         headers["Authorization"] = f"Bearer {model.api_key}"
@@ -64,7 +61,7 @@ async def call_target_model(model: ModelConfig, prompt: str) -> str:
 # YAML loading
 # -----------------------------
 
-def parse_models_from_yaml(yaml_text: str) -> List[ModelConfig]:
+def parse_models_from_yaml(yaml_text: str) -> List[DemoModelConfig]:
     data = yaml.safe_load(yaml_text)
     if not isinstance(data, dict) or "models" not in data:
         raise ValueError("YAML must contain a top-level 'models' list.")
@@ -96,7 +93,7 @@ def parse_models_from_yaml(yaml_text: str) -> List[ModelConfig]:
         }
 
         models.append(
-            ModelConfig(
+            DemoModelConfig(
                 name=name,
                 model_id=model_id,
                 url=url,
@@ -113,7 +110,7 @@ def parse_models_from_yaml(yaml_text: str) -> List[ModelConfig]:
 # UI helpers
 # -----------------------------
 
-def init_routing_defaults(models: List[ModelConfig]) -> List[RoutingRule]:
+def init_routing_defaults(models: List[DemoModelConfig]) -> List[RoutingRule]:
     n = len(models)
     if n == 0:
         return []
@@ -261,15 +258,15 @@ def main():
                 with st.spinner("Estimating query complexity & routing..."):
                     model, device, max_length = load_and_cache_complexity_model()
                     complexity = estimate_complexity(model, device, max_length, prompt)
-                    routed_rule = route_to_model(rules, complexity)
+                    routed_model = route_to_model(rules, complexity)
 
-                if routed_rule is None:
+                if routed_model is None:
                     st.error(
                         f"No routing rule matched complexity {complexity:.3f}. "
                         "Check your intervals."
                     )
                 else:
-                    model = next(m for m in models if m.name == routed_rule.model_name)
+                    model = next(m for m in models if m.name == routed_model)
 
                     # Display complexity & choice
                     st.markdown("### Routing Result")

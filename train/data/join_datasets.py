@@ -31,7 +31,7 @@ from typing import Dict, List
 
 import yaml
 
-from src.data.normalize import norm_from_source
+from train.data.normalize import norm_from_source
 
 COLS = ["id", "dataset", "split", "prompt_text", "label_raw"]
 OUT_COLS = ["id", "dataset", "split", "prompt_text", "label_raw", "label"]
@@ -238,7 +238,7 @@ def normalize_and_write(rows: List[List[str]], out_path: Path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mix", type=str, default="config/default.yaml", help="YAML dataset mix ratios.")
+    ap.add_argument("--mix", type=str, default="config/config.yaml", help="YAML dataset mix ratios.")
     ap.add_argument("--dataset", action="append", default=[],
                     help="Inline: name=...,dir=...,prefix=...,weight=...  (repeatable)")
     ap.add_argument("--out_dir", type=str, default="data/processed")

@@ -138,3 +138,10 @@ class ExperimentResult:
             mid: (corrects.get(mid, 0) / totals[mid]) if totals[mid] > 0 else 0.0
             for mid in totals
         }
+
+
+@dataclass
+class ExperimentMetrics:
+    label: str
+    accuracy: float
+    cost: float

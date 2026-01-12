@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.eval.base import Example
-from src.eval.helm import HelmLiteStore
+from eval.experiment.base import Example
+from eval.helm.helm_store import HelmLiteStore
 
 
 class MmluHelmStore(HelmLiteStore):

@@ -8,9 +8,9 @@ from tqdm import tqdm
 from data.collate import make_collate
 from models.encoder import HFEncoder
 from models.regressor import Regressor
-from src.utils.utils import get_device, mae, spearman
-from src.utils.sampler import BalancedRatioBatchSampler
-from src.config import load_config
+from train.utils.config import load_config
+from train.utils.sampler import BalancedRatioBatchSampler
+from train.utils.utils import get_device, mae, spearman
 
 
 class CSVRegDatasetEval(torch.utils.data.Dataset):
@@ -31,7 +31,7 @@ class CSVRegDatasetEval(torch.utils.data.Dataset):
 @torch.no_grad()
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", type=str, default="config/default.yaml")
+    ap.add_argument("--config", type=str, default="train/config.yaml")
     ap.add_argument("--ckpt", type=str, required=True)
     ap.add_argument("--csv", type=str, help="override test CSV", default=None)
     args = ap.parse_args()

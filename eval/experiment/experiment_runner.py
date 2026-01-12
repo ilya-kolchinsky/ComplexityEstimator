@@ -1,19 +1,16 @@
 from typing import (
-    Callable,
     Dict,
     Iterable,
     List,
     Optional,
 )
 
-from src.eval.base import Example, ExperimentResult, InstanceEval, ModelResult
-from src.eval.cache import EvalCache
-from src.eval.helm import HelmLiteStore
-from src.eval.judge import Judge, MmluChoiceJudge
-from src.eval.local_model import LocalModel
-
-
-RouteFn = Callable[[Example], str]
+from eval.experiment.base import Example, ExperimentResult, InstanceEval, ModelResult
+from eval.utils.cache import EvalCache
+from eval.helm.helm_store import HelmLiteStore
+from eval.utils.judge import Judge, MmluChoiceJudge
+from eval.experiment.local_model import LocalModel
+from routing.routing import RouteFn
 
 
 class ExperimentRunner:
@@ -123,7 +120,7 @@ class ExperimentRunner:
                 )
 
             # Decide which model to use for this example.
-            chosen_model = route(ex)
+            chosen_model = route(ex.query)
 
             if chosen_model not in allowed_models:
                 raise ValueError(

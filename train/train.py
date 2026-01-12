@@ -14,10 +14,10 @@ from transformers import get_cosine_schedule_with_warmup
 from data.collate import make_collate
 from models.encoder import HFEncoder
 from models.regressor import Regressor
-from src.utils.sampler import BalancedRatioBatchSampler
-from src.utils.utils import get_device, set_seed, mae, spearman
-from utils.logging import Logger
-from src.config import load_config
+from train.utils.config import load_config
+from train.utils.sampler import BalancedRatioBatchSampler
+from train.utils.utils import mae, spearman, get_device, set_seed
+from train.utils.logging import Logger
 
 
 class CSVRegDataset(Dataset):
@@ -140,7 +140,7 @@ def eval_epoch(model, loader, device, label="eval"):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", type=str, default="config/default.yaml")
+    ap.add_argument("--config", type=str, default="train/config.yaml")
     args = ap.parse_args()
     cfg = load_config(args.config)
     set_seed(cfg.seed)

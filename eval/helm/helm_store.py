@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple, Union, Set
 import subprocess
 from pathlib import Path
 
-from src.eval.base import Example
+from eval.experiment.base import Example
 
 
 class HelmLiteStore(ABC):
