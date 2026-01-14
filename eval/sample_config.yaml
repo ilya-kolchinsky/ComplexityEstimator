@@ -1,0 +1,9 @@
+models:
+  - id: "my_local_model_id"
+    base_url: "https://vllm-server-endpoint/v1"
+    cost_per_token: 0.1
+  - id: "expensive_frontier_model_id"
+    base_url: null
+    cost_per_token: 1.0
+binary_thresholds: [0.25, 0.5, 0.75]
+dataset_id: mmlu

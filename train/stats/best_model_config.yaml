@@ -12,12 +12,12 @@ train:
   lr_head: 7.5e-5
   weight_decay_encoder: 0.01
   weight_decay_head: 0.0
-  num_epochs: 6
+  num_epochs: 3
   warmup_ratio: 0.06
   grad_accum_steps: 2
   fp16: true
-  freeze_encoder: true
-  encoder_unfrozen_layers: null
+  freeze_encoder: false
+  encoder_unfrozen_layers: 3
 data:
   train_csv: "data/processed/unified_train.csv"
   dev_csv:   "data/processed/unified_dev.csv"

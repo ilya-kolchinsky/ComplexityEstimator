@@ -1,5 +1,8 @@
 import argparse
+import os
 from typing import List, Dict, Tuple
+
+from dotenv import load_dotenv
 
 from eval.experiment.base import ExperimentMetrics
 from eval.helm.helm_store import HelmLiteStore
@@ -12,6 +15,9 @@ from eval.experiment.experiment_runner import ExperimentRunner, RouteFn
 from eval.helm.mmlu_helm_store import MmluHelmStore
 from routing.routing import load_complexity_model, create_single_model_route_function, \
     create_single_threshold_route_function
+
+
+load_dotenv()
 
 
 def run_experiment(experiment_label: str,
@@ -98,7 +104,8 @@ def eval_two_model_setup(config: EvalConfig):
     cheap model and those above the threshold to the expensive model.
     """
 
-    store = MmluHelmStore("data/eval")
+    eval_root_dir = os.getenv("EVAL_ROOT_DIR")
+    store = MmluHelmStore(eval_root_dir)
 
     model_ids = [model["id"] for model in config.models]
     cost_per_token = {model["id"]: model["cost_per_token"] for model in config.models}

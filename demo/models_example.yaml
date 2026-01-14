@@ -1,0 +1,17 @@
+models:
+  - name: local_llama
+    model_id: llama-7b-local
+    url: http://localhost:8001/generate
+    cost: cheap
+
+  - name: mistral_large
+    model_id: mistral-large
+    url: https://mistral.example.com/v1/generate
+    api_key: YOUR_KEY
+    cost: moderate
+
+  - name: gpt_5
+    model_id: gpt-5.1
+    url: https://api.openai.com/v1/chat/completions
+    api_key: YOUR_OPENAI_API_KEY
+    cost: expensive
