@@ -41,11 +41,7 @@ def estimate_complexity(model: Regressor, device: str, max_length: int, prompt: 
     with torch.no_grad():
         p = model(input_ids, attention_mask)
 
-    complexity = float(p.squeeze(0).cpu().item())
-
-    # clamp to [0, 1] just to be safe
-    complexity = max(0.0, min(1.0, complexity))
-    return complexity
+    return float(p.squeeze(0).cpu().item())
 
 
 def route_to_model(rules: List[RoutingRule], difficulty: float) -> Optional[str]:

@@ -155,15 +155,10 @@ def main():
     model = Regressor(enc, dropout=cfg.model["dropout"]).to(device)
 
     # Optionally freeze full encoder
-    if cfg.model.get("freeze_encoder", False):
+    if cfg.train.get("freeze_encoder", False):
         set_requires_grad(model.enc, False)
-    elif cfg.model.get("encoder_unfrozen_layers"):
-        unfreeze_top_k_layers(model, k=cfg.model["encoder_unfrozen_layers"])
-
-    output_model_path = Path(cfg.logging["out_dir"]) / "best.pt"
-    if output_model_path.exists():
-        print(f"Loading the model from {output_model_path}...")
-        model.load_state_dict(torch.load(output_model_path, map_location="cpu"))
+    elif cfg.train.get("encoder_unfrozen_layers"):
+        unfreeze_top_k_layers(model, k=cfg.train["encoder_unfrozen_layers"])
 
     # data
     train_df = pd.read_csv(cfg.data["train_csv"])
@@ -221,6 +216,7 @@ def main():
             f"dev_mae={eval_metrics['mae']:.4f} dev_spear={eval_metrics['spearman']:.4f}")
         if eval_metrics["mae"] < best["mae"]:
             best = eval_metrics
+            output_model_path = Path(cfg.logging["out_dir"]) / "best.pt"
             torch.save(model.state_dict(), output_model_path)
             logger.write_json("best_metrics.json", best)
 

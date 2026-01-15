@@ -25,7 +25,7 @@ The final evaluation report includes the estimated accuracy and the total cost (
    If the routing function chooses a model that is not in HELM:
    - We run the query on the local model.
    - We evaluate correctness (either via a judge model or a deterministic rule).
-   - We cache the correctness so we never re-evaluate that triple again.
+   - We cache the results to avoid repeated re-evaluation.
 
 4. **MMLU is special (and easy):**  
    For MMLU-like multiple-choice datasets:
@@ -84,8 +84,9 @@ Each `*_scenario_state.json` is a serialized HELM `ScenarioState` containing:
 
 The evaluation framework expects a YAML configuration file to read the settings from. 
 The following settings must be provided:
- - Definitions of the models participating in the evaluation (model ID, cost per token, URL for a locally deployed model). *NOTE: as of this version, only two-model evaluation mode is supported, where exactly one model is local and exactly one is remote (API-based)! In this very limited case, the routing rule is defined by a single "local vs. remote" threshold number in the [0,1] interval. More advanced evaluation scenarios will be supported in the near future.*
- - Binary thresholds to build the routing rules from (e.g., given a threshold 0.5, the rule *'route all requests with complexity below 0.5 to the local model, otherwise to the remote model'* will be constructed). A dedicated evaluation procedure will be executed for each threshold.
+ - Definitions of the models participating in the evaluation (model ID, cost per token, URL for a locally deployed model). 
+*NOTE: as of this version, only two-model "LLM vs. SLM" evaluation mode is supported where exactly one "large" and exactly one "small" language model is provided. In this scenario, the routing scheme is defined by a single "local vs. remote" threshold in the [0,1] interval. We plan to add nore advanced evaluation scenarios in the near future.*
+ - Binary thresholds to build the routing rules from (e.g., given a threshold 0.5, the rule *'route all requests with complexity below 0.5 to the local model, otherwise to the remote model'* will be constructed). Each threshold will be evaluted separately by the framework.
  - The HELM dataset ID.
 
 Please see `eval/sample_config.yaml` for more information.
@@ -110,7 +111,7 @@ python eval/run_eval.py --config eval/my_config.yaml
   For MMLU and similar multiple-choice tasks, we avoid using any judge LLM and rely on deterministic choice-letter matching. For other datasets, the correctness depends on the judge you supply (`LlmJudge` or your own).
 
 - **Tokenization & pricing:**  
-  Cost estimation depends on your token_counter and cost_per_token values. There is no built-in integration with billing APIs; everything is user-specified.
+  Cost estimation depends on the user-provided *cost_per_token* values. There is no built-in integration with billing APIs; everything is user-specified.
 
 - **No parallelism yet:**  
   The current `ExperimentRunner` runs examples sequentially. If needed, you can add batching or concurrency around local model evaluation.
