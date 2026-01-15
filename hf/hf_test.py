@@ -1,15 +1,20 @@
+import torch
 from transformers import AutoTokenizer, AutoModel
 
 
 def main():
     repo_id = "ilya-kolchinsky/PromptComplexityEstimator"
 
-    tok = AutoTokenizer.from_pretrained(repo_id)
-    model = AutoModel.from_pretrained(repo_id, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(repo_id, use_fast=True)
+    model = AutoModel.from_pretrained(repo_id, trust_remote_code=True).eval()
 
-    x = tok("Write a detailed security audit plan for a kernel module.", return_tensors="pt", truncation=True)
-    score = model(**x).logits.squeeze(-1).item()
-    print(score)
+    prompt = "Design a distributed consensus protocol with Byzantine fault tolerance..."
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=model.config.max_length, padding=True)
+
+    with torch.no_grad():
+        score = model(**inputs).logits.squeeze(-1).item()
+
+    print(float(score))
 
 
 if __name__ == "__main__":

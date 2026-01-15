@@ -46,8 +46,8 @@ def main():
         output_sigmoid=True,
     )
     config.auto_map = {
-        "AutoConfig": "complexity_estimator.configuration_prompt_complexity.PromptComplexityConfig",
-        "AutoModel": "complexity_estimator.modeling_prompt_complexity.PromptComplexityModel",
+        "AutoConfig": "complexity_estimator/configuration_prompt_complexity.PromptComplexityConfig",
+        "AutoModel": "complexity_estimator/modeling_prompt_complexity.PromptComplexityModel",
     }
 
     model = PromptComplexityModel(config)
