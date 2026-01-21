@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional, Dict, Any
 
 import yaml
 
@@ -7,8 +7,9 @@ import yaml
 @dataclass
 class ModelConfig:
     id: str
-    base_url: str  # None for a model which we only fetch HELM data for but never run
-    cost_per_token: float
+    base_url: Optional[str]  # should not be specified for a model which we only fetch HELM data for but never run
+    cost_per_token: Optional[float]  # for API-based models with the price available from the provider
+    inference_scenario: Optional[Dict[str, Any]]  # for local models, simulation data for cost per token estimation
 
 
 @dataclass

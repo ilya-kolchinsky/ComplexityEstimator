@@ -5,6 +5,7 @@ from typing import List, Dict, Tuple
 from dotenv import load_dotenv
 
 from eval.experiment.base import ExperimentMetrics
+from eval.experiment.cost_estimation import get_cost_per_token_from_scenario_dict
 from eval.helm.helm_store import HelmLiteStore
 from eval.utils.cache import JsonEvalCache
 from eval.utils.config import EvalConfig, load_config
@@ -108,7 +109,21 @@ def eval_two_model_setup(config: EvalConfig):
     store = MmluHelmStore(eval_root_dir)
 
     model_ids = [model["id"] for model in config.models]
-    cost_per_token = {model["id"]: model["cost_per_token"] for model in config.models}
+
+    cost_per_token = {}
+    for model in config.models:
+        model_id = model["id"]
+        current_cost_per_token = model.get("cost_per_token")
+        if current_cost_per_token is not None:
+            # cost per token is explicitly specified
+            cost_per_token[model_id] = float(current_cost_per_token)
+        else:
+            # should calculate the cost per token from scenario specification
+            inference_scenario_config = model.get("inference_scenario")
+            if inference_scenario_config is None or not isinstance(inference_scenario_config, Dict):
+                raise ValueError(f"Neither cost per token nor inference scenario specified for model {model_id}")
+            estimated_cost_per_token = get_cost_per_token_from_scenario_dict(inference_scenario_config)
+            cost_per_token[model_id] = estimated_cost_per_token
 
     remote_model_id, local_model = validate_two_model_eval_config(config)
     local_model_id = local_model.model_id

@@ -1,9 +1,13 @@
 models:
   - id: "my_local_model_id"
     base_url: "https://vllm-server-endpoint/v1"
-    cost_per_token: 0.1
+    inference_scenario:
+      gpu_category: "l4"          # one of: consumer, l4, a10, a100
+      throughput_mode: "typical"  # one of: conservative, typical, throughput
+      model_size_billion_params: 7.0
+      cost_per_hour: 0.9          # USD / hour, optionally overrides default GPU category cost
+      base_tps_7b: 80             # optional baseline tokens/s for 7B in "typical" mode
   - id: "expensive_frontier_model_id"
-    base_url: null
-    cost_per_token: 1.0
+    cost_per_token: 15.0 / 1_000_000  # real provider price
 binary_thresholds: [0.25, 0.5, 0.75]
 dataset_id: mmlu
