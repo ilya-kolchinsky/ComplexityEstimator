@@ -1,6 +1,9 @@
+from pathlib import Path
+from typing import Optional
+
 import torch
 import torch.nn as nn
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, PreTrainedTokenizerBase, AutoConfig, PretrainedConfig
 
 # Sentence-Transformers is optional
 try:
@@ -33,6 +36,7 @@ class HFEncoder(nn.Module):
     def __init__(
         self,
         model_name: str,
+        init_weights: bool = True,
         pooling_mode: str = "auto",
         enable_sentence_transformers: bool = True,
         prefer_pooler_output: bool = False,
@@ -49,7 +53,7 @@ class HFEncoder(nn.Module):
             or self.pooling_mode == "st"
         )
 
-        self._init_backbone(model_name)
+        self._init_backbone(model_name, init_weights)
 
         hidden = self.hidden_size
         self.post_ln = nn.LayerNorm(hidden) if layernorm_after_pool else nn.Identity()
@@ -92,7 +96,7 @@ class HFEncoder(nn.Module):
 
     # ---------- internals ----------
 
-    def _init_backbone(self, model_name: str):
+    def _init_backbone(self, model_name: str, init_weights: bool):
         """
         Decide which backend to use and initialize tokenizer/backbone accordingly.
         """
@@ -105,7 +109,7 @@ class HFEncoder(nn.Module):
                 try:
                     self.tokenizer = self.st_model.tokenizer
                 except Exception:
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+                    self.tokenizer = self.load_or_download_tokenizer(model_name)
                 # Determine hidden size from the pooling module or the transformer config
                 self.hidden_size = self._infer_st_hidden(self.st_model)
                 self.mode = "st"
@@ -114,9 +118,17 @@ class HFEncoder(nn.Module):
                 # Fall back to HF if ST load fails
                 pass
 
-        # Hugging Face AutoModel path
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-        self.backbone = AutoModel.from_pretrained(model_name)
+        print("O Lucifer!")
+        self.tokenizer = self.load_or_download_tokenizer(model_name)
+
+        print("Hail Satan!")
+        if init_weights:
+            self.backbone = AutoModel.from_pretrained(model_name)
+        else:
+            config = self.load_or_download_config(model_name)
+            self.backbone = AutoModel.from_config(config)
+
+        print("Worship Devil!")
         self.hidden_size = self.backbone.config.hidden_size
 
         # Decide pooling behavior for HF
@@ -127,6 +139,110 @@ class HFEncoder(nn.Module):
             self.mode = "pooler"
         else:
             self.mode = "mean"
+
+    @staticmethod
+    def load_or_download_tokenizer(
+            model_name: str,
+            local_dir: Optional[str] = None,
+            use_fast: bool = True,
+    ) -> PreTrainedTokenizerBase:
+        """
+        Load a tokenizer for `model_name`, preferring a local directory.
+        If the local directory does not exist or is incomplete, download
+        from Hugging Face Hub, then save to the local directory for
+        future runs.
+
+        Args:
+            model_name:  Hugging Face model id, e.g. "distilroberta-base"
+            local_dir:   Local directory to load from / save to.
+                         If None, defaults to "./router_tokenizer".
+            use_fast:    Whether to prefer the fast tokenizer implementation.
+
+        Returns:
+            A Hugging Face tokenizer (PreTrainedTokenizerBase subclass).
+        """
+        if local_dir is None:
+            local_dir = "data/hf/router_tokenizer"
+
+        local_path = Path(local_dir)
+
+        # 1) Try local load first (no network)
+        if local_path.is_dir():
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(
+                    local_path,
+                    use_fast=use_fast,
+                    local_files_only=True,
+                )
+                return tokenizer
+            except Exception as e:
+                # Local dir exists but is broken/incomplete; fall back to HF.
+                print(
+                    f"[load_or_download_tokenizer] Failed to load tokenizer from "
+                    f"{local_path} ({type(e).__name__}: {e}). Falling back to HF download."
+                )
+
+        # 2) Download from HF Hub
+        print(f"Downloading tokenizer for {model_name!r} from Hugging Face Hub...")
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name,
+            use_fast=use_fast,
+        )
+
+        # 3) Save locally for next time
+        local_path.mkdir(parents=True, exist_ok=True)
+        tokenizer.save_pretrained(local_path)
+        print(f"Saved tokenizer for {model_name!r} to {local_path}.")
+
+        return tokenizer
+
+    @staticmethod
+    def load_or_download_config(
+            model_name: str,
+            local_dir: Optional[str] = None,
+    ) -> PretrainedConfig:
+        """
+        Load a model config for `model_name`, preferring a local directory.
+        If the local directory does not exist or is incomplete, download
+        from Hugging Face Hub, then save to the local directory for
+        future runs.
+
+        Args:
+            model_name:
+                Hugging Face model id, e.g. "distilroberta-base".
+            local_dir:
+                Local directory to load from / save to.
+                If None, defaults to "./router_config".
+
+        Returns:
+            A Hugging Face PretrainedConfig instance.
+        """
+        if local_dir is None:
+            local_dir = "data/hf/router_config"
+
+        local_path = Path(local_dir)
+
+        # 1) Try local load first (no network)
+        if local_path.is_dir():
+            try:
+                cfg = AutoConfig.from_pretrained(
+                    local_path,
+                    local_files_only=True,
+                )
+                return cfg
+            except Exception as e:
+                print(f"Failed to load config from {local_path} ({type(e).__name__}: {e}). Falling back to HF download.")
+
+        # 2) Download from HF Hub
+        print(f"Downloading config for {model_name!r} from Hugging Face Hub...")
+        cfg = AutoConfig.from_pretrained(model_name)
+
+        # 3) Save locally for next time
+        local_path.mkdir(parents=True, exist_ok=True)
+        cfg.save_pretrained(local_path)
+        print(f"Saved config for {model_name!r} to {local_path}.")
+
+        return cfg
 
     @staticmethod
     def _infer_st_hidden(st_model) -> int:

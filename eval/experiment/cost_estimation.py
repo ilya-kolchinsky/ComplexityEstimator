@@ -34,7 +34,7 @@ class ThroughputMode(str, Enum):
     """
     CONSERVATIVE = "conservative"
     TYPICAL = "typical"
-    THROUGHPUT = "throughput"
+    HIGH_THROUGHPUT = "high-throughput"
 
 
 @dataclass
@@ -106,7 +106,7 @@ DEFAULT_BASE_TPS_7B_TYPICAL: Dict[GPUCategory, float] = {
 THROUGHPUT_MODE_MULTIPLIER: Dict[ThroughputMode, float] = {
     ThroughputMode.CONSERVATIVE: 0.5,   # half the typical throughput
     ThroughputMode.TYPICAL: 1.0,        # baseline
-    ThroughputMode.THROUGHPUT: 2.5,     # optimistic batching / tuning
+    ThroughputMode.HIGH_THROUGHPUT: 2.5,     # optimistic batching / tuning
 }
 
 
@@ -133,9 +133,9 @@ def _parse_throughput_mode(value: str) -> ThroughputMode:
     mapping = {
         "conservative": ThroughputMode.CONSERVATIVE,
         "typical": ThroughputMode.TYPICAL,
-        "throughput": ThroughputMode.THROUGHPUT,
-        "max": ThroughputMode.THROUGHPUT,
-        "high": ThroughputMode.THROUGHPUT,
+        "high-throughput": ThroughputMode.HIGH_THROUGHPUT,
+        "max": ThroughputMode.HIGH_THROUGHPUT,
+        "high": ThroughputMode.HIGH_THROUGHPUT,
     }
     if v not in mapping:
         raise ValueError(
@@ -169,8 +169,8 @@ def inference_scenario_from_dict(config: Mapping[str, Any]) -> InferenceScenario
     throughput_mode = _parse_throughput_mode(throughput_mode_str)
 
     model_size = float(config.get("model_size_billion_params", 7.0))
-    cost_per_hour = float(config.get("cost_per_hour"))
-    base_tps_7b = float(config.get("base_tps_7b"))
+    cost_per_hour = float(config.get("cost_per_hour")) if config.get("cost_per_hour") is not None else None
+    base_tps_7b = float(config.get("base_tps_7b")) if config.get("base_tps_7b") is not None else None
 
     return InferenceScenario(
         gpu_category=gpu_cat,

@@ -1,6 +1,6 @@
 import argparse
 import os
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional, Callable
 
 from dotenv import load_dotenv
 
@@ -28,7 +28,9 @@ def run_experiment(experiment_label: str,
                    local_models: Dict[str, LocalModel],
                    cost_per_token: Dict[str, float],
                    route: RouteFn,
-                   judge: Judge) -> ExperimentMetrics:
+                   judge: Judge,
+                   log_callback: Optional[Callable[[str], None]] = None,
+) -> ExperimentMetrics:
     """
     Executed a single experiment using the given parameters.
     Calculates and returns the total accuracy and cost of the run (number of tokens * cost per token).
@@ -43,6 +45,7 @@ def run_experiment(experiment_label: str,
         judge=judge,
         eval_cache=eval_cache,
         verbose=True,
+        log_callback=log_callback
     )
 
     result = runner.run_dataset(dataset_id=dataset_id, model_ids=model_ids, route=route)
@@ -51,6 +54,7 @@ def run_experiment(experiment_label: str,
     overall_acc = result.total_accuracy()
 
     # Total cost
+    log_callback("Calculating cost & accuracy metrics..")
     model, _, _ = load_complexity_model()
     token_counter = make_st_tokenizer_token_counter(model.enc.tokenizer)
     total_cost = result.total_cost(
@@ -93,7 +97,7 @@ def validate_two_model_eval_config(config: EvalConfig) -> Tuple[str, LocalModel]
     return config.models[0]["id"], small_model
 
 
-def eval_two_model_setup(config: EvalConfig):
+def eval_two_model_setup(config: EvalConfig, log_callback: Optional[Callable[[str], None]] = None) -> List[ExperimentMetrics]:
     """
     Run a simple evaluation scenario considering two models: a "cheap" local model and an "expensive" frontier model.
     The local model will be invoked during evaluation (unless the results are already cached) whereas for the
@@ -105,7 +109,7 @@ def eval_two_model_setup(config: EvalConfig):
     cheap model and those above the threshold to the expensive model.
     """
 
-    eval_root_dir = os.getenv("EVAL_ROOT_DIR")
+    eval_root_dir = config.helm_root_dir if config.helm_root_dir else os.getenv("EVAL_ROOT_DIR")
     store = MmluHelmStore(eval_root_dir)
 
     model_ids = [model["id"] for model in config.models]
@@ -139,21 +143,34 @@ def eval_two_model_setup(config: EvalConfig):
     # Expensive model only
     label = f"{remote_model_id} only"
     route = create_single_model_route_function(remote_model_id)
-    results.append(run_experiment(label, store, dataset_id, model_ids, local_models, cost_per_token, route, judge))
+    results.append(
+        run_experiment(
+            label, store, dataset_id, model_ids, local_models, cost_per_token, route, judge, log_callback
+        )
+    )
 
     # Cheap model only
     label = f"{local_model_id} only"
     route = create_single_model_route_function(local_model_id)
-    results.append(run_experiment(label, store, dataset_id, model_ids, local_models, cost_per_token, route, judge))
+    results.append(
+        run_experiment(
+            label, store, dataset_id, model_ids, local_models, cost_per_token, route, judge, log_callback
+        )
+    )
 
     # Threshold experiments
     for threshold in config.binary_thresholds:
         label = f"threshold {threshold}"
         route = create_single_threshold_route_function(local_model_id, remote_model_id, threshold)
-        results.append(run_experiment(label, store, dataset_id, model_ids, local_models, cost_per_token, route, judge))
+        results.append(
+            run_experiment(
+                label, store, dataset_id, model_ids, local_models, cost_per_token, route, judge, log_callback
+            )
+        )
 
     for result in results:
         print(f"{result.label}: accuracy {result.accuracy}, cost {result.cost}")
+    return results
 
 
 def main():

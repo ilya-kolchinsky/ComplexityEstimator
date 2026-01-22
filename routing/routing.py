@@ -25,9 +25,9 @@ RouteFn = Callable[[str], str]
 
 def load_complexity_model():
     cfg = load_config(os.getenv("ROUTER_MODEL_CONFIG_PATH"))
-    encoder = HFEncoder(cfg.model["name"])
+    encoder = HFEncoder(cfg.model["name"], init_weights=False)
     model = Regressor(encoder)
-    model.load_state_dict(torch.load(os.getenv("ROUTER_MODEL_PATH"), map_location="cpu"))
+    model.load_state_dict(torch.load(os.getenv("ROUTER_MODEL_PATH"), map_location="cpu", weights_only=True))
     device = get_device(cfg)
     model.to(device).eval()
     return model, device, cfg.model["max_length"]

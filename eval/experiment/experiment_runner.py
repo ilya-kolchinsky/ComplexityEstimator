@@ -2,7 +2,7 @@ from typing import (
     Dict,
     Iterable,
     List,
-    Optional,
+    Optional, Callable,
 )
 
 from eval.experiment.base import Example, ExperimentResult, InstanceEval, ModelResult
@@ -32,12 +32,30 @@ class ExperimentRunner:
         judge: Judge,
         eval_cache: Optional[EvalCache] = None,
         verbose: bool = False,
+        log_callback: Optional[Callable[[str], None]] = None,
     ) -> None:
         self.helm_store = helm_store
         self.local_models = local_models
         self.judge = judge
         self.eval_cache = eval_cache
         self.verbose = verbose
+        self.log_callback = log_callback
+
+    # -------------------------------------------------------------
+    # Helper: logging
+    # -------------------------------------------------------------
+    def _log(self, message: str) -> None:
+        """
+        Internal helper for logging.
+
+        - If log_callback is provided, call it.
+        - Else, if verbose=True, print to stdout.
+        - Else, do nothing.
+        """
+        if self.log_callback is not None:
+            self.log_callback(message)
+        elif self.verbose:
+            print(message, flush=True)
 
     # -------------------------------------------------------------
     # Helper: detect multiple-choice datasets (MMLU-style)
@@ -96,27 +114,20 @@ class ExperimentRunner:
         is_mc_dataset = self._is_multiple_choice_dataset(examples)
         mc_judge = MmluChoiceJudge() if is_mc_dataset else None
 
-        if self.verbose:
-            print(
-                f"[ExperimentRunner] Starting evaluation for dataset={dataset_id!r} "
-                f"with {num_examples} examples and models={sorted(allowed_models)!r}."
-            )
-            if is_mc_dataset:
-                print("[ExperimentRunner] Detected multiple-choice dataset; "
-                      "using MmluChoiceJudge for local evaluations.")
-            else:
-                print("[ExperimentRunner] Non-multiple-choice dataset; "
-                      "using provided Judge for local evaluations.")
+        self._log(
+            f"Starting evaluation for dataset={dataset_id!r} with {num_examples} examples and models={sorted(allowed_models)!r}."
+        )
+        if is_mc_dataset:
+            self._log("Detected multiple-choice dataset; using MmluChoiceJudge for local evaluations.")
+        else:
+            self._log("Non-multiple-choice dataset; using provided Judge for local evaluations.")
 
         instance_evals: List[InstanceEval] = []
 
         for idx, ex in enumerate(examples, start=1):
-            if self.verbose and (
-                idx == 1 or idx % 50 == 0 or idx == num_examples
-            ):
-                print(
-                    f"[ExperimentRunner] Processing example {idx}/{num_examples} "
-                    f"(id={ex.id!r})..."
+            if idx == 1 or idx % 50 == 0 or idx == num_examples:
+                self._log(
+                    f"Processing example {idx}/{num_examples} (id={ex.id!r})..."
                 )
 
             # Decide which model to use for this example.
@@ -137,11 +148,9 @@ class ExperimentRunner:
 
             if helm_answer is not None:
                 response, is_correct = helm_answer
-                if self.verbose:
-                    print(
-                        f"[ExperimentRunner] Example {ex.id!r} routed to model "
-                        f"{chosen_model!r}: using HELM prediction (no local inference)."
-                    )
+                self._log(
+                    f"Example {ex.id!r} routed to model {chosen_model!r}: using HELM prediction (no local inference)."
+                )
                 model_result = ModelResult(
                     example_id=ex.id,
                     model_id=chosen_model,
@@ -160,12 +169,9 @@ class ExperimentRunner:
                     )
 
                 if cached_correct is not None:
-                    if self.verbose:
-                        print(
-                            f"[ExperimentRunner] Example {ex.id!r} routed to model "
-                            f"{chosen_model!r}: using cached correctness "
-                            f"(no local inference)."
-                        )
+                    self._log(
+                        f"Example {ex.id!r} routed to model {chosen_model!r}: using cached result (no local inference)."
+                    )
                     model_result = ModelResult(
                         example_id=ex.id,
                         model_id=chosen_model,
@@ -182,11 +188,9 @@ class ExperimentRunner:
                             f"in HELM and no LocalModel was provided for it."
                         )
 
-                    if self.verbose:
-                        print(
-                            f"[ExperimentRunner] Example {ex.id!r} routed to model "
-                            f"{chosen_model!r}: running local model + judge..."
-                        )
+                    self._log(
+                        f"Example {ex.id!r} routed to model {chosen_model!r}: running local model + judge..."
+                    )
 
                     candidate = local_model.generate(ex.query)
                     ref = self.helm_store.get_reference_answer(dataset_id, ex.id)
@@ -224,16 +228,12 @@ class ExperimentRunner:
 
         # Persist cache at the end (if present)
         if self.eval_cache is not None:
-            if self.verbose:
-                print("[ExperimentRunner] Flushing evaluation cache to disk...")
+            self._log("Flushing evaluation cache to disk...")
             self.eval_cache.flush()
-            if self.verbose:
-                print("[ExperimentRunner] Cache flush complete.")
+            self._log("Cache flush complete.")
 
-        if self.verbose:
-            print(
-                f"[ExperimentRunner] Finished evaluation for dataset={dataset_id!r}. "
-                f"Processed {num_examples} examples."
-            )
+        self._log(
+            f"Finished evaluation for dataset={dataset_id!r}. Processed {num_examples} examples."
+        )
 
         return ExperimentResult(dataset_id=dataset_id, instance_evals=instance_evals)

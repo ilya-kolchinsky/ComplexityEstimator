@@ -17,6 +17,7 @@ class EvalConfig:
     models: List[ModelConfig]
     binary_thresholds: List[float]
     dataset_id: str
+    helm_root_dir: Optional[str]
 
 
 def load_config(path: str) -> EvalConfig:
