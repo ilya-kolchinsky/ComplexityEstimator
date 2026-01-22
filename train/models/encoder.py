@@ -118,17 +118,14 @@ class HFEncoder(nn.Module):
                 # Fall back to HF if ST load fails
                 pass
 
-        print("O Lucifer!")
         self.tokenizer = self.load_or_download_tokenizer(model_name)
 
-        print("Hail Satan!")
         if init_weights:
             self.backbone = AutoModel.from_pretrained(model_name)
         else:
             config = self.load_or_download_config(model_name)
             self.backbone = AutoModel.from_config(config)
 
-        print("Worship Devil!")
         self.hidden_size = self.backbone.config.hidden_size
 
         # Decide pooling behavior for HF
