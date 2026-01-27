@@ -192,15 +192,15 @@ class ExperimentRunner:
                         f"Example {ex.id!r} routed to model {chosen_model!r}: running local model + judge..."
                     )
 
-                    candidate = local_model.generate(ex.query)
+                    candidate = local_model.generate(ex.query_with_instructions)
                     ref = self.helm_store.get_reference_answer(dataset_id, ex.id)
 
                     if is_mc_dataset and mc_judge is not None:
                         # MMLU-style multiple choice: use choice-letter judge
-                        is_correct = mc_judge.is_correct(ex.query, ref, candidate)
+                        is_correct = mc_judge.is_correct(ex.query_with_instructions, ref, candidate)
                     else:
                         # Generic dataset: use the Judge supplied to ExperimentRunner
-                        is_correct = self.judge.is_correct(ex.query, ref, candidate)
+                        is_correct = self.judge.is_correct(ex.query_with_instructions, ref, candidate)
 
                     # Store in cache (correctness only)
                     if self.eval_cache is not None:

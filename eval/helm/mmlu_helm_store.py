@@ -124,6 +124,8 @@ class MmluHelmStore(HelmLiteStore):
 
         canonical_model = model_ids[0]
         scenario_state = self._load_scenario_state(dataset_id, canonical_model)
+
+        instructions = scenario_state["adapter_spec"]["instructions"]
         request_states = scenario_state["request_states"]
 
         examples: List[Example] = []
@@ -136,26 +138,27 @@ class MmluHelmStore(HelmLiteStore):
                 # Skip malformed entries
                 continue
 
+            correct_letter = self._extract_correct_choice_letter(rs)
+
             input_obj = instance.get("input", {})
             question_text = input_obj.get("text", "")
+            output_mapping = rs.get("output_mapping", {})
 
-            request = rs.get("request", {})
-            prompt = request.get("prompt", "")
+            prompt = self._compile_closed_form_question(question_text, output_mapping)
             if not isinstance(prompt, str):
                 prompt = str(prompt)
-
-            correct_letter = self._extract_correct_choice_letter(rs)
+            prompt_with_instructions = f"{instructions}\n{prompt}"
 
             ex = Example(
                 id=instance_id,
-                # IMPORTANT: the query is the **full prompt** used in HELM
                 query=prompt,
+                query_with_instructions=prompt_with_instructions,
                 # For MMLU, the reference answer is the choice index (e.g., "A")
                 reference_answer=correct_letter or "",
                 metadata={
                     "question_text": question_text,
                     "split": instance.get("split"),
-                    "output_mapping": rs.get("output_mapping", {}),
+                    "output_mapping": output_mapping,
                 },
             )
 
@@ -164,6 +167,15 @@ class MmluHelmStore(HelmLiteStore):
 
         self._examples_cache[dataset_id] = examples
         self._example_index[dataset_id] = index
+
+    @staticmethod
+    def _compile_closed_form_question(question: str, answers: dict[str, str]) -> str:
+        lines = [question]
+
+        for key in sorted(answers.keys()):
+            lines.append(f"{key}. {answers[key]}")
+
+        return "\n".join(lines)
 
     @staticmethod
     def _extract_correct_choice_letter(request_state: Dict[str, Any]) -> Optional[str]:

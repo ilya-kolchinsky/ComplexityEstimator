@@ -50,11 +50,15 @@ def run_experiment(experiment_label: str,
 
     result = runner.run_dataset(dataset_id=dataset_id, model_ids=model_ids, route=route)
 
+    if log_callback is not None:
+        log_callback("Calculating cost & accuracy metrics..")
+    else:
+        print("Calculating cost & accuracy metrics..")
+
     # Accuracy
     overall_acc = result.total_accuracy()
 
     # Total cost
-    log_callback("Calculating cost & accuracy metrics..")
     model, _, _ = load_complexity_model()
     token_counter = make_st_tokenizer_token_counter(model.enc.tokenizer)
     total_cost = result.total_cost(

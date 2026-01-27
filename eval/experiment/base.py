@@ -9,14 +9,10 @@ from typing import Optional, List, Dict, Callable, Any
 class Example:
     """
     A single evaluation example.
-
-    IMPORTANT:
-    - `query` is the **full prompt** used for the LLM request (taken from scenario_state.request.prompt),
-      not just the bare question text.
-    - The original question text is stored in metadata["question_text"].
     """
     id: str
-    query: str                    # full prompt sent to the model
+    query: str                    # the original question + multiple choice options if applicable
+    query_with_instructions: str  # full prompt to be sent to the model
     reference_answer: str         # expected output used for correctness checking
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -111,7 +107,7 @@ class ExperimentResult:
                     f"Missing cost_per_token entry for model_id={model_id!r}"
                 )
 
-            tokens = token_counter(ie.example.query, model_id)
+            tokens = token_counter(ie.example.query_with_instructions, model_id)
             total += tokens * cost_per_token[model_id]
 
         return total
